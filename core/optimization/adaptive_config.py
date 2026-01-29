@@ -6,12 +6,14 @@ Automatically adjusts training parameters based on dataset characteristics and t
 import os
 from typing import Dict, Any, Tuple
 import math
+from core.optimization.hyperparameter_tuner import HyperparameterTuner
 
 
 class AdaptiveConfigOptimizer:
     """Optimizes training configuration based on dataset characteristics and training type."""
     
     def __init__(self):
+        self.hyperparameter_tuner = HyperparameterTuner()
         self.style_config = {
             "base_epochs": 25,
             "base_lr_unet": 3e-5,
@@ -146,8 +148,12 @@ class AdaptiveConfigOptimizer:
         optimized_lr_unet = self.calculate_adaptive_lr(base_lr_unet, image_count, training_type)
         optimized_lr_text = self.calculate_adaptive_lr(base_lr_text, image_count, training_type)
         
-        optimized_config["unet_lr"] = optimized_lr_unet
-        optimized_config["text_encoder_lr"] = optimized_lr_text
+        fine_tuned_unet_lr, fine_tuned_text_lr = self.hyperparameter_tuner.fine_tune_learning_rates(
+            image_count, training_type, optimized_lr_unet, optimized_lr_text
+        )
+        
+        optimized_config["unet_lr"] = fine_tuned_unet_lr
+        optimized_config["text_encoder_lr"] = fine_tuned_text_lr
         
         base_batch_size = base_config["base_batch_size"]
         optimized_batch_size = self.calculate_adaptive_batch_size(base_batch_size, image_count)
@@ -159,8 +165,15 @@ class AdaptiveConfigOptimizer:
         base_repeats = base_config["base_repeats"]
         optimized_repeats = self.calculate_adaptive_repeats(base_repeats, image_count, training_type)
         
-        optimized_config["min_snr_gamma"] = base_config["min_snr_gamma"]
-        optimized_config["noise_offset"] = base_config["noise_offset"]
+        base_min_snr = base_config["min_snr_gamma"]
+        base_noise_offset = base_config["noise_offset"]
+        
+        optimized_config["min_snr_gamma"] = self.hyperparameter_tuner.optimize_min_snr_gamma(
+            image_count, training_type, base_min_snr
+        )
+        optimized_config["noise_offset"] = self.hyperparameter_tuner.optimize_noise_offset(
+            image_count, training_type, base_noise_offset
+        )
         
         if training_type != "style":
             if model_type == "sdxl":
@@ -198,6 +211,17 @@ class AdaptiveConfigOptimizer:
         
         if image_count > 50:
             optimized_config["max_data_loader_n_workers"] = min(4, optimized_config.get("max_data_loader_n_workers", 2) + 1)
+        
+        model_complexity = optimized_config.get("network_dim", 32)
+        if model_complexity <= 0:
+            model_complexity = 32
+        
+        optimized_config = self.hyperparameter_tuner.fine_tune_hyperparameters(
+            optimized_config,
+            image_count,
+            training_type,
+            model_complexity=model_complexity
+        )
         
         return optimized_config, optimized_repeats
     

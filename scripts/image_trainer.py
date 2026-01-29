@@ -201,18 +201,24 @@ def create_config(task_id, model_path, model_name, model_type, expected_repo_nam
         training_type = optimizer.determine_training_type(train_data_dir, is_style)
         
         print(f"Created optimized config at {config_path}", flush=True)
-        print(f"=== Adaptive Optimization Summary ===", flush=True)
+        print(f"=== Adaptive Optimization & Fine-Tuning Summary ===", flush=True)
         print(f"Training type: {training_type}", flush=True)
         print(f"Image count: {image_count}", flush=True)
         print(f"Optimized epochs: {config.get('max_train_epochs')}", flush=True)
-        print(f"Optimized UNet LR: {config.get('unet_lr')}", flush=True)
-        print(f"Optimized Text Encoder LR: {config.get('text_encoder_lr')}", flush=True)
+        print(f"Fine-tuned UNet LR: {config.get('unet_lr'):.2e}", flush=True)
+        print(f"Fine-tuned Text Encoder LR: {config.get('text_encoder_lr'):.2e}", flush=True)
         print(f"Optimized batch size: {config.get('train_batch_size')}", flush=True)
         print(f"Gradient accumulation: {config.get('gradient_accumulation_steps')}", flush=True)
+        print(f"Fine-tuned min_snr_gamma: {config.get('min_snr_gamma', 7.0):.2f}", flush=True)
+        print(f"Fine-tuned noise_offset: {config.get('noise_offset', 0.0411):.4f}", flush=True)
+        print(f"Optimized warmup steps: {config.get('lr_warmup_steps')}", flush=True)
         print(f"Optimized repeats: {optimized_repeats}", flush=True)
         print(f"Optimizer: {config.get('optimizer_type')}", flush=True)
         print(f"LR Scheduler: {config.get('lr_scheduler')}", flush=True)
-        print(f"=====================================", flush=True)
+        print(f"Max grad norm: {config.get('max_grad_norm', 1.0)}", flush=True)
+        if config.get('network_dim', -1) > 0:
+            print(f"Network dimensions: dim={config.get('network_dim')}, alpha={config.get('network_alpha')}", flush=True)
+        print(f"==================================================", flush=True)
         
         return config_path, optimized_repeats
 
