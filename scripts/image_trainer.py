@@ -24,7 +24,6 @@ import trainer.utils.training_paths as train_paths
 from core.config.config_handler import save_config, save_config_toml
 from core.dataset.prepare_diffusion_dataset import prepare_dataset
 from core.models.utility_models import ImageModelType
-from core.optimization import AdaptiveConfigOptimizer
 
 
 def get_model_path(path: str) -> str:
@@ -40,8 +39,6 @@ def create_config(task_id, model_path, model_name, model_type, expected_repo_nam
 
     """Create the diffusion config file"""
     config_template_path, is_style = train_paths.get_image_training_config_template_path(model_type, train_data_dir)
-    
-    optimizer = AdaptiveConfigOptimizer()
 
     is_ai_toolkit = model_type in [ImageModelType.Z_IMAGE.value, ImageModelType.QWEN_IMAGE.value]
     
@@ -68,17 +65,12 @@ def create_config(task_id, model_path, model_name, model_type, expected_repo_nam
         config_path = os.path.join(train_cst.IMAGE_CONTAINER_CONFIG_SAVE_PATH, f"{task_id}.yaml")
         save_config(config, config_path)
         print(f"Created ai-toolkit config at {config_path}", flush=True)
-        return config_path, 1
+        return config_path
     else:
 
         with open(config_template_path, "r") as file:
             config = toml.load(file)
 
-        # Apply adaptive optimization
-        config, optimized_repeats = optimizer.optimize_config(
-            config, train_data_dir, is_style, model_type
-        )
-        
         # Update config
         network_config_person = {
             "stabilityai/stable-diffusion-xl-base-1.0": 235,
@@ -196,31 +188,8 @@ def create_config(task_id, model_path, model_name, model_type, expected_repo_nam
         # Save config to file
         config_path = os.path.join(train_cst.IMAGE_CONTAINER_CONFIG_SAVE_PATH, f"{task_id}.toml")
         save_config_toml(config, config_path)
-        
-        image_count = optimizer.count_images(train_data_dir)
-        training_type = optimizer.determine_training_type(train_data_dir, is_style)
-        
-        print(f"Created optimized config at {config_path}", flush=True)
-        print(f"=== Adaptive Optimization & Fine-Tuning Summary ===", flush=True)
-        print(f"Training type: {training_type}", flush=True)
-        print(f"Image count: {image_count}", flush=True)
-        print(f"Optimized epochs: {config.get('max_train_epochs')}", flush=True)
-        print(f"Fine-tuned UNet LR: {config.get('unet_lr'):.2e}", flush=True)
-        print(f"Fine-tuned Text Encoder LR: {config.get('text_encoder_lr'):.2e}", flush=True)
-        print(f"Optimized batch size: {config.get('train_batch_size')}", flush=True)
-        print(f"Gradient accumulation: {config.get('gradient_accumulation_steps')}", flush=True)
-        print(f"Fine-tuned min_snr_gamma: {config.get('min_snr_gamma', 7.0):.2f}", flush=True)
-        print(f"Fine-tuned noise_offset: {config.get('noise_offset', 0.0411):.4f}", flush=True)
-        print(f"Optimized warmup steps: {config.get('lr_warmup_steps')}", flush=True)
-        print(f"Optimized repeats: {optimized_repeats}", flush=True)
-        print(f"Optimizer: {config.get('optimizer_type')}", flush=True)
-        print(f"LR Scheduler: {config.get('lr_scheduler')}", flush=True)
-        print(f"Max grad norm: {config.get('max_grad_norm', 1.0)}", flush=True)
-        if config.get('network_dim', -1) > 0:
-            print(f"Network dimensions: dim={config.get('network_dim')}, alpha={config.get('network_alpha')}", flush=True)
-        print(f"==================================================", flush=True)
-        
-        return config_path, optimized_repeats
+        print(f"Created config at {config_path}", flush=True)
+        return config_path
 
 
 def run_training(model_type, config_path):
@@ -303,13 +272,12 @@ async def main():
 
     model_path = train_paths.get_image_base_model_path(args.model)
 
-    # Prepare dataset first with base repeats
+    # Prepare dataset
     print("Preparing dataset...", flush=True)
-    base_repeats = cst.DIFFUSION_SDXL_REPEATS if args.model_type == ImageModelType.SDXL.value else cst.DIFFUSION_FLUX_REPEATS
-    
+
     prepare_dataset(
         training_images_zip_path=train_paths.get_image_training_zip_save_path(args.task_id),
-        training_images_repeat=base_repeats,
+        training_images_repeat=cst.DIFFUSION_SDXL_REPEATS if args.model_type == ImageModelType.SDXL.value else cst.DIFFUSION_FLUX_REPEATS,
         instance_prompt=cst.DIFFUSION_DEFAULT_INSTANCE_PROMPT,
         class_prompt=cst.DIFFUSION_DEFAULT_CLASS_PROMPT,
         job_id=args.task_id,
@@ -317,7 +285,7 @@ async def main():
     )
 
     # Create config file
-    config_result = create_config(
+    config_path = create_config(
         args.task_id,
         model_path,
         args.model,
@@ -325,12 +293,6 @@ async def main():
         args.expected_repo_name,
         args.trigger_word
     )
-    
-    if isinstance(config_result, tuple):
-        config_path, optimized_repeats = config_result
-    else:
-        config_path = config_result
-        optimized_repeats = cst.DIFFUSION_SDXL_REPEATS if args.model_type == ImageModelType.SDXL.value else cst.DIFFUSION_FLUX_REPEATS
 
     # Run training
     run_training(args.model_type, config_path)
