@@ -5,7 +5,7 @@ WORKDIR /app
 RUN pip install --no-cache-dir huggingface_hub aiohttp pydantic transformers
 
 COPY trainer/ trainer/
-COPY core/ core/
+COPY scripts/core/ core/
 
 ENV PYTHONPATH=/app
 

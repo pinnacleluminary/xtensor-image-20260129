@@ -1,15 +1,15 @@
 import os
+import shutil
 from urllib.parse import urlparse
 
 import pynvml
 from git import GitCommandError
 from git import Repo
-import shutil
 
+import trainer.constants as cst
 from core.models.utility_models import GPUInfo
 from core.models.utility_models import GPUType
 from trainer.tasks import get_running_tasks
-import trainer.constants as cst
 
 
 def clone_repo(repo_url: str, parent_dir: str, branch: str = None, commit_hash: str = None) -> str:
@@ -37,7 +37,15 @@ def clone_repo(repo_url: str, parent_dir: str, branch: str = None, commit_hash: 
 
         if commit_hash:
             repo.git.fetch("--all")
-            repo.git.checkout(commit_hash)
+            try:
+                repo.git.checkout(commit_hash)
+            except GitCommandError as checkout_error:
+                # Check if it's an invalid commit hash format issue
+                if "pathspec" in str(checkout_error) and "did not match any file(s) known to git" in str(checkout_error):
+                    raise RuntimeError(f"Invalid commit hash '{commit_hash}' - commit not found in repository")
+                else:
+                    # Re-raise other git checkout errors
+                    raise
 
         return repo_dir
 
@@ -104,11 +112,28 @@ def build_wandb_env(task_id: str, hotkey: str) -> dict:
 
 def extract_container_error(logs: str) -> str | None:
     lines = logs.strip().splitlines()
-
-    for line in reversed(lines):
-        line = line.strip()
-        if line and ":" in line and any(word in line for word in ["Error", "Exception"]):
-            return line
+    if lines:
+        for line in reversed(lines):
+            line = line.strip()
+            if line and ":" in line and any(word in line for word in ["Error", "Exception"]):
+                return line
 
     return None
+
+
+def are_gpus_available(requested_gpu_ids: list[int]) -> bool:
+    """
+    Check if any of the requested GPU IDs are already in use by training tasks.
+    
+    Returns:
+        bool: True if all requested GPUs are available, False otherwise
+    """
+    running_tasks = get_running_tasks()
+    
+    for task in running_tasks:
+        for gpu_id in requested_gpu_ids:
+            if gpu_id in task.gpu_ids:
+                return False
+    
+    return True
 

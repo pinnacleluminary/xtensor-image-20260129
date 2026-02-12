@@ -12,7 +12,7 @@ RUN pip install --no-cache-dir \
     wandb 
 
 COPY trainer/ trainer/
-COPY core/ core/
+COPY scripts/core/ core/
 
 ENV PYTHONPATH=/app
 

@@ -5,6 +5,7 @@ from trainer.utils.style_detection import detect_styles_in_prompts
 from core.models.utility_models import DpoDatasetType
 from core.models.utility_models import GrpoDatasetType
 from core.models.utility_models import InstructTextDatasetType
+from core.models.utility_models import ChatTemplateDatasetType
 from core.models.utility_models import ImageModelType
 
 def get_checkpoints_output_path(task_id: str, repo_name: str) -> str:
@@ -43,10 +44,8 @@ def get_image_training_config_template_path(model_type: str, train_data_dir: str
 
     elif model_type == ImageModelType.FLUX.value:
         return str(Path(train_cst.IMAGE_CONTAINER_CONFIG_TEMPLATE_PATH) / "base_diffusion_flux.toml"), False
-    
     elif model_type == ImageModelType.Z_IMAGE.value:
         return str(Path(train_cst.IMAGE_CONTAINER_CONFIG_TEMPLATE_PATH) / "base_diffusion_zimage.yaml"), False
-        
     elif model_type == ImageModelType.QWEN_IMAGE.value:
         return str(Path(train_cst.IMAGE_CONTAINER_CONFIG_TEMPLATE_PATH) / "base_diffusion_qwen_image.yaml"), False
 
